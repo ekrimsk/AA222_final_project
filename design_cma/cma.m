@@ -1,4 +1,4 @@
-function [xbest, fitness, reason, dataHandles] = cma(xguess, fitnessfun,...
+function [xbest, fitness, reason, dataHandles, genData] = cma(xguess, fitnessfun,...
                                                              options, varargin)   
 %*******************************************************************************
 %   Function:
@@ -41,7 +41,7 @@ function [xbest, fitness, reason, dataHandles] = cma(xguess, fitnessfun,...
 
 %       AA222 Modifications (May 2019)
 %           - Removed constraining function input 
-%
+%           - Removed all positional varargin and replaced with an input parser 
 %
 %  
 %
@@ -49,52 +49,86 @@ function [xbest, fitness, reason, dataHandles] = cma(xguess, fitnessfun,...
 %       Erez Krimsky, ekrimsky@stanford.edu, 2/19/18 
 %       Stanford University, Biomechatronics Lab 
 %******************************************************************************
-dataHandles = {}; 
-doprints = false;
-doplots = false; 
 N = numel(xguess);
+
+
+
+% parse the inputs 
+
+% required inputs -- the first thress 
+p = inputParser; 
+
+defaultParmdiffs =  ones(N, 1);   
+defaultMovieName = '';  % no movie 
+
+
+addParameter(p, 'init_scale', defaultParmdiffs, @isnumeric)
+addParameter(p, 'plot', false, @islogical);
+addParameter(p, 'plotFun', 0); 
+addParameter(p, 'print', true, @islogical);
+addParameter(p, 'figHandle', 0);    % could make handle to empty object and then do typechecking on this 
+
+
+
+
+addParameter(p, 'movieName', defaultMovieName);    % TODO -- add this functionality if have time 
+
+defaultLearning = 'none';
+expectedLearning = {'none','lamarckian','baldwinian'};
+addParameter(p, 'hybrid',defaultLearning,  @(x) any(validatestring(x, expectedLearning)));
+
+
+addParameter(p, 'hybridFun', 0);    % actual function to call in hybrid method, could add some validation 
+
+
+
+
+
+parse(p, varargin{:}); 
+% display(p.Results)
+
+parmdiffs = p.Results.init_scale; 
+parmdiffs(parmdiffs == 0) = 1; % if zero, will kill opti 
+
+doprints = p.Results.print; 
+hybrid = p.Results.hybrid;      % default is none 
+hybridFun = p.Results.hybridFun; 
+
+
+movieName = p.Results.movieName; 
+makeMovie = false;
+if ~strcmp(movieName, defaultMovieName)
+    makeMovie = true;
+end 
+
+
+dataHandles = {}; 
+doplots = false; 
+
+
 xmean = reshape(xguess, N, 1);
-parmdiffs = ones(N, 1); % will change if there is is a constraining function
-useConstraint = false; 
+% parmdiffs = ones(N, 1); % will change if there is is a constraining function
 
-
-if nargin > 3 % if there is parameter scaling
-    parmdiffs = varargin{1}; % update parmdiffs to go with scaling 
-    parmdiffs(parmdiffs == 0) = 1; % if zero, will kill opti 
-end 
-
-
-if nargin > 4  % if there are constraining functions 
-
-    % comment out 5/20/19
-
-    %if ~isempty(varargin{2})
-    %    useConstraint = true; 
-    %    constrainfun = varargin{2};
-    %end 
-end 
-
-if nargin > 5 
-    doprints = varargin{3}; % could add checking on type 
-end 
-
+% TODO -- add plotting functionality back in 
 % For creating plots 
-if nargin > 7
-    fig = varargin{4};
-    plotfun = varargin{5}; 
-    doplots = true; 
-end 
+%if nargin > 7
+%    fig = varargin{4};
+%    plotfun = varargin{5}; 
+%    doplots = true; 
+%end 
 
 % For creating an animation of the plots 
-makeMovie = false;
-if nargin > 8
-    movieName = varargin{6};
-    makeMovie = true;
-    dir1 = 'cma_frames';
-    mkdir(dir1); 
-    system(['rm ', dir1, '/*']);
-    F(options.MaxGenerations) = struct('cdata',[],'colormap',[]);
-end 
+
+% TODO -- add movie functionality back in 
+%makeMovie = false;
+%if nargin > 8
+%    movieName = varargin{6};
+%   makeMovie = true;
+%    dir1 = 'cma_frames';
+%    mkdir(dir1); 
+%    system(['rm ', dir1, '/*']);
+%    F(options.MaxGenerations) = struct('cdata',[],'colormap',[]);
+%end 
 
 
 
@@ -116,13 +150,11 @@ lastImproveStep = 0;
 
 % User defined input parameters (need to be edited)
 sigma = 0.3;
-%sigma = 0.325;  % sometimes useful 
-%sigma = 0.35;
+
 
 % Strategy parameter setting: Selection  
 lambda = 4+floor(3*log(N));  % population size, offspring number 
-%lambda = 2 * lambda; % or 5 times, who knows? % NOTE vary this 
-% -- play around with how quickly decrease sample space
+
 
 
 mu = lambda/2;               % number of parents/points for recombination
@@ -158,7 +190,7 @@ chiN=N^0.5*(1-1/(4*N)+1/(21*N^2));  % expectation of
 counteval = 0;  % the next 40 lines contain the 20 lines of interesting code 
 iter = 1; 
 
-
+genData = {};
 
 while (counteval < stopeval) && (iter <= maxIter) && ...
                                         (iter - lastImproveStep < maxStall)
@@ -167,19 +199,78 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
     constrained = zeros(lambda, 1); % number of samples that have been constrained
     
     % TODO --- put back to parfor 
+    popStats = struct(); 
+    fit_data = {};
+
     for k = 1:lambda,
         newsample = xmean + sigma * (B * (D .* randn(N,1))); % m + sig * Normal(0,C) 
-        if useConstraint
-            constrained_sample = constrainfun(newsample);
-            if any(constrained_sample - newsample)
-                constrained(k) = 1; 
+
+        if ( strcmp(hybrid, 'lamarckian') || strcmp(hybrid, 'baldwinian'))   
+    
+            [sample_fitness, sample_fit_data] = fitnessfun(newsample);
+ 
+            [updated_fitness, updated_sample] = hybridFun(newsample, sample_fit_data); 
+
+
+            % MIGHT BE USEFUL TO DISREGARD ANY UPDTE THAT DOESNT HELP!
+
+            if (updated_fitness > sample_fitness)
+                display('updated fitness worse')
+                display(sample_fitness)
+                display(updated_fitness)
             end 
-            newsample = constrained_sample; 
+
+            
+            % Just some metrics 
+            update_diff = newsample - updated_sample;
+            pct_change = 100 * (update_diff./newsample);
+
+            %disp('old: '); disp(newsample');
+            %disp('new:'); disp(updated_sample');
+            %disp('pct change'); disp(pct_change');
+            %display(sample_fitness)
+            %display(updated_fitness)
+
+            %display(newsample)
+            %display(updated_sample)
+
+            % TODO - comment back in 
+            
+            sample_fitness = updated_fitness; 
+            if (strcmp(hybrid, 'lamarckian'))
+                newsample = updated_sample;     % ---  just skip this for baldwinian 
+            end 
+
+
+            % Adding some of the update information to sample_fit_data so we can process later 
+            sample_fit_data.updated_sample = updated_sample;
+            sample_fit_data.new_fitness = updated_fitness; 
+            fit_data{end + 1} = sample_fit_data; 
+
+        else 
+            sample_fitness = fitnessfun(newsample);     % may return the other data??? 
         end 
-        sample_fitness = fitnessfun(newsample); 
-        arx(:,k) = newsample;
+        
         arfitness(k) = sample_fitness;
+        arx(:,k) = newsample;
+
+
+        % want to log all the samples and thier fitness and any other interesting data to process 
     end
+    popStats.samples = arx; 
+    popStats.fitness = arfitness;
+
+    % NOTE -- want to dump this info even for the default case 
+    if (strcmp(hybrid, 'lamarckian'))   
+        popStats.data = fit_data; 
+    elseif (strcmp(hybrid, 'baldwinian'))   
+        popStats.data = fit_data; 
+    end 
+
+
+
+    genData{end + 1} = popStats; 
+
     counteval = counteval+lambda;  
   
     % Sort by fitness and compute weighted mean into xmean
@@ -253,8 +344,8 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
     meanfit = mean(arfitness(~isinf(arfitness))); 
     if doprints
         constrainedCount = nnz(constrained);
-        fprintf('Iteration: %i, Percent Constrained: %0.2f%%, Mean fitness: %0.4f, Min fitness: %0.4f\n',...
-                            iter,  100*constrainedCount/lambda, meanfit, min(arfitness));
+        fprintf('Iteration: %i, Mean fitness: %0.4f, Min fitness: %0.4f\n',...
+                                              iter, meanfit, min(arfitness));
     end
 
     % check if plateuad 

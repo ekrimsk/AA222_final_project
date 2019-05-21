@@ -40,7 +40,7 @@ w = 0.5;    % relative weighting
 %%--------  NO Hybrid Opti -----------------
 
 
-n = 5;      % TODO later, loop through different problem sizes 
+n = 4;      % TODO later, loop through different problem sizes 
 
 
 % need to find a good initialization point -- do in driver 
@@ -53,12 +53,22 @@ n = 5;      % TODO later, loop through different problem sizes
 
 
 % Add in small plot showing stiffness design space just as a reference here 
-fig = figure; 
+% fig = figure; 
 
 %  [minForce, maxForce] = springBoundsPlot(fig, springLims)
 
 % maybe change the "data" param 
-[fitness, data] = actuator_optimization(n, fp, w, springLims);
+[fitness, data, genData] = actuator_optimization(n, fp, w, springLims);
+
+
+
+
+
+
+
+
+
+
 
 % will want comparison between plain cma and hybrid apprach(es)
 
