@@ -1,15 +1,20 @@
-%%***************************
+%%******************************************************************
+%	Energy Recycling Actuator Design Optimization
+%	AA222 Final Project Main Script, Spring 2019
 %
-%
-%***************************
+%	Erez Krimsky 
+%   ekrimsky@stanford.edu
+%*******************************************************************
 
 close all; clear all; clc; 
-
+Design_Opti_Params;   % TODO clean up 
+springLims.w_max = ClutchSpringConstants.cw; 
 
 % ------ Define force profile attributes ------------ 
-load('force_profiles/profile_set');
 maxForce = 300;         % Newtons 
 maxDisp = 0.04;         % meters 
+load('force_profiles/profile_set');
+
 
 fp = fp_set(1);         % TODO -- replace with more!!!
 numProfiles = numel(fp);
@@ -20,10 +25,6 @@ for i = 1:numProfiles
 end 
 
 
-% LOAD IN SPRING LIMS 
-Design_Opti_Params;   % TODO -- clean this up -- remove what we dont really want to use here or split 
-
-springLims.w_max = ClutchSpringConstants.cw; 
 %%
 %
 %
@@ -33,9 +34,17 @@ springLims.w_max = ClutchSpringConstants.cw;
 %        
 %
 
+num_weights = 10; 
+weight_vec = linspace(0, 1, num_weights); 
+
+
+
+
 w = 0.5;    % relative weighting 
 
 
+
+% Will want to save some things for post processing 
 
 %%--------  NO Hybrid Opti -----------------
 
@@ -63,6 +72,8 @@ n = 4;      % TODO later, loop through different problem sizes
 
 
 
+
+% COMPARING OPTIMIZATIONS USE w = 0.5; 
 
 
 
