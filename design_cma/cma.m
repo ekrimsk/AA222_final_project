@@ -198,11 +198,11 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
     % Generate and evaluate lambda offspring
     constrained = zeros(lambda, 1); % number of samples that have been constrained
     
-    % TODO --- put back to parfor 
-    popStats = struct(); 
-    fit_data = {};
 
-    for k = 1:lambda,
+    popStats = struct(); 
+    fit_data = cell(lambda, 1);
+
+    parfor k = 1:lambda,
         newsample = xmean + sigma * (B * (D .* randn(N,1))); % m + sig * Normal(0,C) 
 
         if ( strcmp(hybrid, 'lamarckian') || strcmp(hybrid, 'baldwinian'))   
@@ -245,7 +245,7 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
             % Adding some of the update information to sample_fit_data so we can process later 
             sample_fit_data.updated_sample = updated_sample;
             sample_fit_data.new_fitness = updated_fitness; 
-            fit_data{end + 1} = sample_fit_data; 
+            fit_data{k} = sample_fit_data; 
 
         else 
             sample_fitness = fitnessfun(newsample);     % may return the other data??? 
@@ -344,8 +344,8 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
     meanfit = mean(arfitness(~isinf(arfitness))); 
     if doprints
         constrainedCount = nnz(constrained);
-        fprintf('Iteration: %i, Mean fitness: %0.4f, Min fitness: %0.4f\n',...
-                                              iter, meanfit, min(arfitness));
+        fprintf('Iteration: %i, Mean fitness: %0.4f, Max fitness: %0.4f, Min fitness: %0.4f\n',...
+                                              iter, meanfit, max(arfitness), min(arfitness));
     end
 
     % check if plateuad 

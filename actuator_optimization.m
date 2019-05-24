@@ -14,15 +14,19 @@
 
 % could add optActuator as an output but probs wont do anything with it in the short term 
 
-function [fitness, data, genData] = actuator_optimization(n, fp, w, springLims)     
+function [fitness, final_design, data, genData] = actuator_optimization(n, fp, w, springLims, varargin)     
 
-% TODO -- add a parser -- needs to specify cma type (hybrid or not plus maybe some other params )    
+assert((w <= 1) && (w >= 0), 'invalid weight'); 
 
-% NOTE flags/options for radial design? 
+% For now no parser, only varargin is to do hybrid approach 
+if isempty(varargin)
+    opt_type = 'none';
+else 
+    opt_type = varargin{1};         % Must be 'lamarckian' or 'baldwinian '
+    validatestring(opt_type, {'lamarckian', 'baldwinian', 'none'});
+end 
 
-% NOTE -- an input parser could be really nice here 
-% TODO -- assertion check on 0 <= w <= 1
-
+% Loading in some parameters from the class so we have them locally 
 k1 = ClutchSpringConstants.k1;
 k2 = ClutchSpringConstants.k2;
 cw = ClutchSpringConstants.cw; 
@@ -32,7 +36,6 @@ t = springLims.t_max;
 
 % Get the maximum force and displacements from the force profile 
 maxForce = -inf; maxDisp = -inf;  minDisp = inf; 
-
 for i = 1:numel(fp)
     if (max(fp{i}.force) > maxForce)
         maxForce =  max(fp{i}.force);
@@ -47,18 +50,10 @@ for i = 1:numel(fp)
     end 
 end 
 
-display(maxForce)
-display(maxDisp)
-display(minDisp)
 
 
 % Define initial force guess, stifness guess, spring length, clutch length guess 
-
-% TODO -- incorporate back in to have min force guess 
-%minForce_geom = (k2 * A_min) + (k1 * ps_min * A_min); 
-%maxForce_geom = (k2 * A_max) + (k1 * ps_max * A_max); % N/m 
-
-f_min = 3; % N, lowest we 
+f_min = 3; % N, lowest force we will start with 
 
 
 f_init = linspace(0.2 * maxForce, 0.5 * maxForce, n)';
@@ -66,84 +61,42 @@ f_init = linspace(0.2 * maxForce, 0.5 * maxForce, n)';
 k_init = minStiff + 0.2 * (maxStiff - minStiff);  % midway stiffness
 k_init = k_init(:);  
 
-%w_init = (k_init .* L_init)./(k1 .* t); 
 w_init = 0.9 * cw * ones(n, 1);     % just for feasible init 
-% L_init = 3 * maxDisp.*ones(n, 1); % TODO issue is that there are limits on what this can be 
 L_init = (w_init./k_init)*k1.*t; 
 F_max_init = f_init + k_init*maxDisp;
 
 cf = ClutchSpringConstants.cf; 
 l_cs_init = 2 * (f_init + maxDisp*k_init)/(cf * cw);
-
-
-
-% NOTE -- may want to make a function for combining and separating out the parts of this 
 init_design = [f_init; k_init; L_init; l_cs_init];  
-display(f_init)
-display(k_init)
-display(L_init)
-display(l_cs_init)
 
-display(init_design)
-% ----------------------------
-%
-% Define function handles to pass to the solver  -- will use penalties 
-%
-% ----------------------------------
-
-% where 'x' is the design vector 
-% fitnessfun = @(x) w * design_fitness(x, springLims, maxDisp, minDisp) + (1 - w) * control_fitness(x, fp); 
 
 
 fitnessfun = @(x) fitnessFunction(x, springLims, maxDisp, minDisp, fp, w);
 
-disp('Playing with some function handles here......')
 
-display(w_init); 
-% Run the CMA -- get the results out an return 
 
-% TODO 
+%===========================================================================
+%
+%   Set CMA-ES Parameters and initial scaling 
+%
+%==========================================================================
 cmaOptions.MaxGenerations = 40; 
 cmaOptions.MaxStallGenerations = 10;   % 80 
 parmdiffs = 0.05 * init_design;     % or keep at identity? idk 
 
-
-% TODO -- add in oother cma options and maybe an arg parser for doing lamarck/baldwinian 
-% just looking at where the issues arrise on the initial point 
-%design_fitness(init_design, springLims, maxDisp, minDisp); 
-%return 
-
 % NOTE: would like to be able to initialize at a feasible point 
-
 [~, init_penalty] = penalty(init_design, springLims, maxDisp, minDisp);   display(init_penalty); 
-
-% [final_design, fullCost] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs, 'hybrid', 'lamarckian') %  'init_scale', parmdiffs, 'print', true); 
-
-
-hybridFun = @(x, data) deal(0, x);       % TODO -- update 
-
-
 hybridFun = @(x,y) fixed_control_fitness(x, y, springLims, maxDisp, minDisp, fp, w);
 
 
-% load('delete_me.mat')
-
-
-%[final_design, fullCost, reason, dataHandles, genData] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs,....
-%                                                                 'hybrid', 'lamarckian', 'hybridFun', hybridFun); %  'init_scale', parmdiffs, 'print', true); 
-
-
-
-%[final_design, fullCost, reason, dataHandles, genData] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs,....
-%                                                                 'hybrid', 'baldwinian', 'hybridFun', hybridFun); %  'init_scale', parmdiffs, 'print', true); 
-
-[final_design, fullCost, reason, dataHandles, genData] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs); %  'init_scale', parmdiffs, 'print', true); 
-
-
-%[final_design, fullCost] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs, 'print', true); 
+if strcmp(opt_type, 'none')
+    [final_design, fullCost, reason, dataHandles, genData] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs); %  'init_scale', parmdiffs, 'print', true); 
+else 
+    [final_design, fullCost, reason, dataHandles, genData] = cma(init_design, fitnessfun, cmaOptions, 'init_scale', parmdiffs,...
+                                                                 'hybrid', opt_type, 'hybridFun', hybridFun);
+end 
 
 % some prints 
-
 des_final = design_fitness(final_design, springLims, maxDisp, minDisp) ;
 control_final = control_fitness(final_design, fp); 
 
@@ -260,101 +213,19 @@ end
 %
 %=======================================================================================
 
-
-
-function change_cost = change_penalty(new_sample, init_sample)
-
-    % lets limit ourselves to 10% change from the initial point -- effectively a weighted L1 norm 
-
-    allowable_diff = 0.05 * init_sample; 
-
-    abs_change = abs(new_sample - init_sample); 
-
-    penalty_vec = min(allowable_diff - abs_change, 0);
-
-    rho = 8000; % could add penalty increasing in CMA     
-    p_quad = norm(penalty_vec, 2)^2;  
-    p_count = nnz(penalty_vec); 
-    change_cost = p_count + rho*p_quad;
-
-end 
-
-function [new_fitness, new_sample] = fixed_control_fitness(init_sample, fit_data, springLims, maxDisp, minDisp, fp,  w) 
-
-    % TODO -- for lamarckian learning especially, may need to limit how for we move from initial point -- could be in the form of small quadratic cost
-
-    n = round(length(init_sample)/4); 
-    design_cost_fun = @(x) design_fitness(x, springLims, maxDisp, minDisp) ;
-    penalty_cost_fun = @(x) penalty(x, springLims, maxDisp, minDisp);       % TODO -- maybe plus additionally quadratic on how far we moved! 
-
-    change_cost_fun = @(x) change_penalty(x, init_sample);
-
-
-    % NOTE -- may want to do that penalty seperately so can see if actually improving without it 
-
-    % distribute the fit data 
-    U = fit_data.U; 
-    X = fit_data.X;
-    f_des = fit_data.f_des; 
-
-    % Now define the control cost assuming fixed control strategy 
-    % [f_vec, k_vec, L_vec, l_cs_vec] = split_design(x);
-
-    dt =  fp{1}.time(2) - fp{1}.time(1);
-
-
-    control_cost_fun = @(x) dt * (norm(f_des - (((x(1:n))'*U) + (x(n+1:2*n))'*(U .* X))', 2)^2)/length(f_des);      % should be same as force returned by bqbf  -- TODO will need to check if norm is squared there or not! 
-
-    
-    total_cost_fun = @(x) penalty_cost_fun(x) + w*design_cost_fun(x) + (1-w) * control_cost_fun(x) + change_cost_fun(x);
-
-
-
-
-    % VAGUE SANITY CHECK ON INIT VALUES 
-
-    cmaOptions.MaxGenerations = 300; 
-    cmaOptions.MaxStallGenerations = 50;   % 80 
-    parmdiffs = 0.05 * init_sample;     % or keep at identity? idk 
-
-    %disp('-Running Local Steps -');
-
-    [new_sample, new_fitness, reason] =  cma(init_sample, total_cost_fun, cmaOptions, 'init_scale', parmdiffs, 'print', false);
-
-    %{
-    f_out_init = (((init_sample(1:n))'*U) + (init_sample(n+1:2*n))'*(U .* X));
-    f_out_new = (((new_sample(1:n))'*U) + (new_sample(n+1:2*n))'*(U .* X));
-    figure, 
-    time = fp{1}.time; 
-    plot(time, fp{1}.force, 'k--'), hold on 
-    plot(time(:), f_out_init(:), 'b');
-    plot(time(:), f_out_new(:), 'r');
-    hold off 
-    %} 
-
-    % TODO IN THE MORNING -- Break down before and after 
-        % design score  
-end 
-
-
-
-
-
 function  [cost, data]  = fitnessFunction(x, springLims, maxDisp, minDisp, fp, w)       % For main opti 
 
     design_cost = design_fitness(x, springLims, maxDisp, minDisp) ;
-    
     [control_cost, c_data] =  control_fitness(x, fp); 
     
     penalty_cost = penalty(x, springLims, maxDisp, minDisp);
-
     data = c_data;
     
     data.penalty_cost = penalty_cost; 
     data.design_cost = design_cost; 
     data.control_cost = control_cost; 
 
-    cost =  penalty_cost + w * design_cost + (1 - w) *control_cost; 
+    cost = penalty_cost + (w * design_cost) + (1 - w) * control_cost; 
 end 
 
 
@@ -418,19 +289,20 @@ function [penalty_cost, penalty_vec] = penalty(x, springLims, maxDisp, minDisp)
 
 
     % forces out of order penalty -- need forces increasing 
-    force_order_penalty = min(diff(f_vec),0);
+    force_order_penalty = min(diff(f_vec),0)/min(abs(f_vec));
     % negative froce penalty 
-    neg_f_penalty = min(0, f_vec); 
+    neg_f_penalty = min(0, f_vec)./min(abs(f_vec)); 
     % Width only goes negative if length or stifness goes negative 
-    neg_L_penalty = min(0, L_vec); 
+    neg_L_penalty = min(0, L_vec)./min(abs(L_vec)); 
     % spring clutches cant have negative length 
-    neg_l_cs_penalty = min(0, l_cs_vec); 
+    neg_l_cs_penalty = min(0, l_cs_vec)./min(abs(l_cs_vec)); 
     % spring too wide penalty -- cant be wider than clutch width 
     w_vec = (k_vec .* L_vec)./(k1 .* t); 
-    w_large_penalty = max(w_vec - cw, 0); 
-    % TODO 
+    w_large_penalty = max(w_vec - cw, 0)./min(abs(w_vec)); 
+
+
     % insufficient overlap penalty -- think about when this would happen opti wise 
-    l_ol_penalty = max(l_ol_req - l_cs_vec, 0); 
+    l_ol_penalty = max(l_ol_req - l_cs_vec, 0)./min(abs(l_ol_req)); 
     
     penalty_vec = [force_order_penalty;...
                  neg_f_penalty; 
@@ -443,7 +315,7 @@ function [penalty_cost, penalty_vec] = penalty(x, springLims, maxDisp, minDisp)
     rho = 5000; % could add penalty increasing in CMA     
     p_quad = norm(penalty_vec, 2)^2;  
     p_count = nnz(penalty_vec); 
-    penalty_cost = p_count + rho*p_quad;
+    penalty_cost = p_count + rho*p_quad;      % Commented out p_count and normalized to things to see if it stabilizes 
 end 
 
 function [control_score, control_data] = control_fitness(x, fp)
@@ -557,6 +429,62 @@ end
 
 
 
+function change_cost = change_penalty(new_sample, init_sample)
+
+    % lets limit ourselves to 10% change from the initial point -- effectively a weighted L1 norm 
+
+    allowable_diff = 0.05 * init_sample;        % TODO -- fool arond with this 
+
+    abs_change = abs(new_sample - init_sample); 
+
+    penalty_vec = min(allowable_diff - abs_change, 0);
+
+    rho = 8000; % could add penalty increasing in CMA     
+    p_quad = norm(penalty_vec, 2)^2;  
+    p_count = nnz(penalty_vec); 
+    change_cost = p_count + rho*p_quad;     % TODO -- think about count penalty here 
+end 
+
+function [new_fitness, new_sample] = fixed_control_fitness(init_sample, fit_data, springLims, maxDisp, minDisp, fp,  w) 
+
+    % TODO -- for lamarckian learning especially, may need to limit how for we move from initial point -- could be in the form of small quadratic cost
+
+    n = round(length(init_sample)/4); 
+    design_cost_fun = @(x) design_fitness(x, springLims, maxDisp, minDisp) ;
+    penalty_cost_fun = @(x) penalty(x, springLims, maxDisp, minDisp);       
+    change_cost_fun = @(x) change_penalty(x, init_sample);
+
+    % distribute the fit data 
+    U = fit_data.U; 
+    X = fit_data.X;
+    f_des = fit_data.f_des; 
+
+    % NOTE -- will need to add in param to loop through force profiles (lazy here though )
+    dt =  fp{1}.time(2) - fp{1}.time(1);
+
+    control_cost_fun = @(x) dt * (norm(f_des - (((x(1:n))'*U) + (x(n+1:2*n))'*(U .* X))', 2)^2)/length(f_des);      % should be same as force returned by bqbf  -- TODO will need to check if norm is squared there or not! 
+    
+    total_cost_fun = @(x) penalty_cost_fun(x) + w*design_cost_fun(x) + (1-w) * control_cost_fun(x) + change_cost_fun(x);
+
+    % VAGUE SANITY CHECK ON INIT VALUES 
+    cmaOptions.MaxGenerations = 300; 
+    cmaOptions.MaxStallGenerations = 50;   % 80 
+    parmdiffs = 0.05 * init_sample;     % or keep at identity? idk 
+
+    [new_sample, new_fitness, reason] =  cma(init_sample, total_cost_fun, cmaOptions, 'init_scale', parmdiffs, 'print', false);
+
+    %{
+    f_out_init = (((init_sample(1:n))'*U) + (init_sample(n+1:2*n))'*(U .* X));
+    f_out_new = (((new_sample(1:n))'*U) + (new_sample(n+1:2*n))'*(U .* X));
+    figure, 
+    time = fp{1}.time; 
+    plot(time, fp{1}.force, 'k--'), hold on 
+    plot(time(:), f_out_init(:), 'b');
+    plot(time(:), f_out_new(:), 'r');
+    hold off 
+    %} 
+
+end 
 
 
 

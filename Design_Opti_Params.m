@@ -18,8 +18,6 @@ kc = 0.2; % 0.01; %1.2;
 kf = 1; 
 ke = 1; 
 kp = 300; %5; 
-w = .002; % 0.4; % relative weight for 2 components of cost function Theta 
-
 
 %%  ------------------- Set bounds on physical dimensions -----------------
 
