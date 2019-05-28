@@ -1,15 +1,19 @@
 
 %*********************************
-
-% fp -- structure of force profiles 
-% n = number of springs 
-% w = weight on control (1 - w is weight on design)
-% spingLims -- bounds on what dimensions springs can reasonably have 
-
-% TODO -- add in options to use the hybrid methods 
-% TODO -- add i/o options for tracking results 
-
-
+%   Energy Recycling Actuator Design Optimization
+%   AA222 Final Project Main Script, Spring 2019
+%
+%   Erez Krimsky 
+%   ekrimsky@stanford.edu
+%
+%
+%       fp - structure of force profiles 
+%       n - number of springs 
+%       w - weight on control (1 - w is weight on design)
+%       spingLims - bounds on what dimensions springs can reasonably have 
+%
+%
+%
 %*********************************
 
 % could add optActuator as an output but probs wont do anything with it in the short term 
@@ -51,7 +55,6 @@ for i = 1:numel(fp)
 end 
 
 
-
 % Define initial force guess, stifness guess, spring length, clutch length guess 
 f_min = 3; % N, lowest force we will start with 
 
@@ -70,7 +73,6 @@ l_cs_init = 2 * (f_init + maxDisp*k_init)/(cf * cw);
 init_design = [f_init; k_init; L_init; l_cs_init];  
 
 
-
 fitnessfun = @(x) fitnessFunction(x, springLims, maxDisp, minDisp, fp, w);
 
 
@@ -80,8 +82,8 @@ fitnessfun = @(x) fitnessFunction(x, springLims, maxDisp, minDisp, fp, w);
 %   Set CMA-ES Parameters and initial scaling 
 %
 %==========================================================================
-cmaOptions.MaxGenerations = 40; 
-cmaOptions.MaxStallGenerations = 10;   % 80 
+cmaOptions.MaxGenerations = 100; 
+cmaOptions.MaxStallGenerations = 20;   % 80 
 parmdiffs = 0.05 * init_design;     % or keep at identity? idk 
 
 % NOTE: would like to be able to initialize at a feasible point 
@@ -324,7 +326,7 @@ function [control_score, control_data] = control_fitness(x, fp)
     % TODO -- actually run over all the fps but for now just the first 
 
 
-    forceProfile = fp{1};   % TODO -- run over all of them 
+    
 
 
     [f_vec, k_vec, L_vec, l_cs_vec] = split_design(x); % function to distribute 
@@ -371,6 +373,13 @@ function [control_score, control_data] = control_fitness(x, fp)
     domRatio = inf; % 10000; % 
     numControl = 70;        % shouldn=t really need this -- abstract hese things out 
     numKeep = 16; 
+
+
+    num_fp = numel(fp);
+
+
+
+    forceProfile = fp{1};   % NOTE -- should replace and restructure so we can actually loop through these 
 
     [bestSols, forces, minvals, varargout]  =  BQBF(test_actuator,...
                                             forceProfile, numKeep, numControl, domRatio) ; 

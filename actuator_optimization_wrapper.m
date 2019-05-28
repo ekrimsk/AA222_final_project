@@ -6,8 +6,8 @@
 %   ekrimsky@stanford.edu
 
 
-% 		n - 
-%		w - 
+% 		n - number of springs to use 
+%		w - relative weight for objective (w on design, 1 - w on control)
 % 		type - 'basic', 'lamarckian', or 'baldwinian'
 %*******************************************************************
 
@@ -31,7 +31,7 @@ maxDisp = 0.04;         % meters
 load('force_profiles/profile_set');
 
 
-fp = fp_set(1);         % TODO -- replace with more!!! ---- 
+fp = fp_set(1:2);         
 numProfiles = numel(fp);
 
 for i = 1:numProfiles
