@@ -8,7 +8,7 @@
 %*******************************************************************
 close all; clear all; clc;
 
-num_check = 10; 	% NOTE -- will increase to make plots later 
+num_check = 15; 	% NOTE -- will increase to make plots later 
 
 weight_vec = linspace(0, 1, num_check); 
 
@@ -23,10 +23,10 @@ control_scores = zeros(num_check, 1);
 % For now n = 4, could throw another loop around this if we want 
 
 %n_vec = [3, 4, 5, 6, 7];
-n_vec = [3, 5];
+n_vec = [3, 4, 5, 6, 7];
 
-design_scores_list = cell(10, 1);
-control_scores_list = cell(10, 1);
+design_scores_list = cell(length(n_vec), 1);
+control_scores_list = cell(length(n_vec), 1);
 
 number_of_opts = length(n_vec)*num_check; 
 
@@ -43,18 +43,15 @@ for j = 1:length(n_vec)
 	design_scores_list{j} = design_scores;
 	control_scores_list{j} = control_scores;
 end 
-
-
-
+save('pareto_data.mat'); 
 
 %% Create the figure 
-
-
-figure, hold on
+figure, hold all
 for j = 1:length(n_vec)
+	n = n_vec(j); 
 	design_scores = design_scores_list{j};
 	control_scores = control_scores_list{j};
-	plot(control_scores, design_scores, 'bx');
+	plot(control_scores, design_scores, 'x--', 'Displayname', sprintf('n = %d', n));
 end 
 
 
@@ -64,4 +61,3 @@ xlabel('Actuator Control Cost')
 print('pareto_frontier', '-dpng', '-r300');
 hold off 
 
-save('pareto_data.mat'); 

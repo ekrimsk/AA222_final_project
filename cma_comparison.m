@@ -10,6 +10,7 @@
 %
 %*******************************************************************
 
+%
 close all; clear all; clc; 
 
 % make sure parraelization is running 
@@ -20,16 +21,17 @@ close all; clear all; clc;
 % could throw multiple curves on the same plot 
 %\
 
+%{
 
 
 % Lets set the same weight for each 
-w = 0.5; 
+w = 0.4; 
 n = 4; 			% NOTE Could loop through a few later if we have the time 
-
+num_opts = 1; 
 
 
 figure, hold on 
-for num_opts = 1:5
+for j = 1:num_opts
 
 
 
@@ -38,20 +40,26 @@ for num_opts = 1:5
 	rng(5);		% ressetting the random number generator 
 	[fitness, optimal_design,  data, genData] = actuator_optimization_wrapper(n, w, 'none');
 	basicGenData = genData; 
+	[means, basic_mins, maxs, stds] = process_gen_data(basicGenData); 
+
 
 
 	disp(' Running Baldwinian Opti')
 	rng(5);		% ressetting the random number generator 
 	[fitness, optimal_design,  data, genData] = actuator_optimization_wrapper(n, w, 'baldwinian');
 	baldwinianGenData = genData; 
+	[means, baldwinian_mins, maxs, stds] = process_gen_data(baldwinianGenData); 
+
+
 
 	disp(' Running Lamarckian Opti')
 	rng(5);		% ressetting the random number generator 
 	[fitness, optimal_design,  data, genData] = actuator_optimization_wrapper(n, w, 'lamarckian');
 	lamarckianGenData = genData; 
+	[means, lamarckian_mins, maxs, stds] = process_gen_data(lamarckianGenData); 
 
 
-	save('cma_comparison.mat')
+
 
 
 	% Then post process the genData after looking through how its structured 
@@ -62,29 +70,87 @@ for num_opts = 1:5
 	% Lets Do for w = 0.5, W = 0.1, W = 0.9 for now.... 
 
 
-	[means, basic_mins, maxs, stds] = process_gen_data(basicGenData); 
-	[means, baldwinian_mins, maxs, stds] = process_gen_data(baldwinianGenData); 
-	[means, lamarckian_mins, maxs, stds] = process_gen_data(lamarckianGenData); 
-	% Want to make big convergence plot shoing lines for each --- 
+	% Loop through processing the data 
+
 	
 	%plot(gens, means,'k', 'DisplayName', 'mean'), hold on 
 	%plot(gens, maxs, 'g', 'DisplayName', 'max')
-	plot(1:length(basic_mins), basic_mins, 'r', 'DisplayName', 'Basic Min');
-	plot(1:length(baldwinian_mins), baldwinian_mins, 'g', 'DisplayName', 'Baldwinian Min');
-	plot(1:length(lamarckian_mins), lamarckian_mins, 'b', 'DisplayName', 'Lamarckian Min');
+	%plot(1:length(basic_mins), basic_mins, 'r', 'DisplayName', 'Basic Min');
+	%plot(1:length(baldwinian_mins), baldwinian_mins, 'g', 'DisplayName', 'Baldwinian Min');
+	%plot(1:length(lamarckian_mins), lamarckian_mins, 'b', 'DisplayName', 'Lamarckian Min');
 
 
 	% fill_in_between(gens, mins, maxs); 
 	% not sure if should incorporate stds 
 
-
-
 end 
 
 
-	legend show; 
-	hold off 
-% shade = fill_in_between(x1, y1, y2); 
+save('cma_comparison.mat')
+
+	% shade = fill_in_between(x1, y1, y2); 
+
+%}
+
+
+
+ load('cma_comparison.mat')
+
+
+genData = baldwinianGenData;
+
+
+[baldwinian_pre_mins, baldwinian_init_mins] = process_hybrid_gen(baldwinianGenData);
+[lamarckian_pre_mins, lamarckian_init_mins] = process_hybrid_gen(lamarckianGenData);
+
+
+figure, hold on 
+
+	plot(1:length(basic_mins), basic_mins, 'r', 'DisplayName', 'Basic Min');
+
+
+	plot(1:length(baldwinian_mins), baldwinian_mins, 'g', 'DisplayName', 'Baldwinian Min');
+	%plot(1:length(baldwinian_pre_mins), baldwinian_pre_mins, 'k', 'DisplayName', 'Baldwinian Pre Min');
+	plot(1:length(baldwinian_init_mins), baldwinian_init_mins, 'g--', 'DisplayName', 'Baldwinian init Min');
+
+
+	plot(1:length(lamarckian_mins), lamarckian_mins, 'b', 'DisplayName', 'Lamarckian Min');
+	%plot(1:length(lamarckian_pre_mins), lamarckian_pre_mins, 'y', 'DisplayName', 'Lamarckian Pre Min');
+	plot(1:length(lamarckian_init_mins), lamarckian_init_mins, 'b--', 'DisplayName', 'Lamarckian init Min');
+
+
+
+	%plot(1:length(lamarckian_mins), lamarckian_mins, 'b', 'DisplayName', 'Lamarckian Min');
+hold off 	
+
+print('hybrid_converge_compare', '-dpng', '-r300'); 
+
+
+function [pre_mins, init_mins] = process_hybrid_gen(genData)
+	
+	numGens = numel(genData);
+
+	pre_mins = zeros(numGens, 1);       % NOTE these are what came before our mins -- NOT the same as the mins of the init pop 
+
+	init_mins = zeros(numGens, 1); 		% mins of the init population -- not the same as what lead to new min per se
+
+	for i = 1:numGens 
+		[minFit, minIdx] = min(genData{i}.fitness);		% post hybrid fitness 
+
+		pre_mins(i) = genData{i}.data{minIdx}.initial_fitness; 	% can use w to back calculate out if we need 
+
+		% 
+		pop_size = numel(genData{i}.data);
+		init_pop_fit = zeros(pop_size, 1);
+		for k = 1:pop_size
+			init_pop_fit(k) = genData{i}.data{k}.initial_fitness; 
+		end 
+
+		init_mins(i) = min(init_pop_fit); 
+	end 
+
+end 	
+
 
 
 
@@ -98,28 +164,5 @@ function plot_handle = fill_in_between(x, y1, y2)
 	plot_handle.FaceAlpha = 0.5;
 	plot_handle.LineStyle = 'none'; 
 end 
-
-
-function [means, mins, maxs, stds] = process_gen_data(genData); 
-	numGens = numel(genData); 
-	means = zeros(numGens, 1);
-	mins = zeros(numGens, 1);
-	maxs = zeros(numGens, 1);
-	stds = zeros(numGens, 1);
-
-	% NOTE - could add 'quartile' data 
-	for k = 1:numGens
-		fits = genData{k}.fitness;
-		means(k) = mean(fits);
-		mins(k) = min(fits);
-		maxs(k) = max(fits);
-		stds(k) = std(fits);
-	end 
-end 
-
-
-
-
-
 
 

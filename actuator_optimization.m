@@ -82,8 +82,8 @@ fitnessfun = @(x) fitnessFunction(x, springLims, maxDisp, minDisp, fp, w);
 %   Set CMA-ES Parameters and initial scaling 
 %
 %==========================================================================
-cmaOptions.MaxGenerations = 100; 
-cmaOptions.MaxStallGenerations = 20;   % 80 
+cmaOptions.MaxGenerations = 300 %30;     % TODO -- put back up
+cmaOptions.MaxStallGenerations = 25;   % 80 
 parmdiffs = 0.05 * init_design;     % or keep at identity? idk 
 
 % NOTE: would like to be able to initialize at a feasible point 
@@ -289,7 +289,7 @@ function [penalty_cost, penalty_vec] = penalty(x, springLims, maxDisp, minDisp)
     l_co_vec = max(max(tops) - (l0_vec + minDisp + l_cs_vec - l_ol_req)) * ones(n, 1); 
     bottoms = min(tops - l_co_vec, 0); 
 
-
+    %{
     % forces out of order penalty -- need forces increasing 
     force_order_penalty = min(diff(f_vec),0)/min(abs(f_vec));
     % negative froce penalty 
@@ -301,6 +301,19 @@ function [penalty_cost, penalty_vec] = penalty(x, springLims, maxDisp, minDisp)
     % spring too wide penalty -- cant be wider than clutch width 
     w_vec = (k_vec .* L_vec)./(k1 .* t); 
     w_large_penalty = max(w_vec - cw, 0)./min(abs(w_vec)); 
+    %}
+
+    % forces out of order penalty -- need forces increasing 
+    force_order_penalty = min(diff(f_vec),0)/1e3;
+    % negative froce penalty 
+    neg_f_penalty = min(0, f_vec)./1e2; 
+    % Width only goes negative if length or stifness goes negative 
+    neg_L_penalty = 10 * min(0, L_vec); 
+    % spring clutches cant have negative length 
+    neg_l_cs_penalty = 10 * min(0, l_cs_vec); 
+    % spring too wide penalty -- cant be wider than clutch width 
+    w_vec = (k_vec .* L_vec)./(k1 .* t); 
+    w_large_penalty = 10 * max(w_vec - cw, 0); 
 
 
     % insufficient overlap penalty -- think about when this would happen opti wise 
@@ -317,7 +330,7 @@ function [penalty_cost, penalty_vec] = penalty(x, springLims, maxDisp, minDisp)
     rho = 5000; % could add penalty increasing in CMA     
     p_quad = norm(penalty_vec, 2)^2;  
     p_count = nnz(penalty_vec); 
-    penalty_cost = p_count + rho*p_quad;      % Commented out p_count and normalized to things to see if it stabilizes 
+    penalty_cost = 0.5 * p_count + rho*p_quad;      % Commented out p_count and normalized to things to see if it stabilizes 
 end 
 
 function [control_score, control_data] = control_fitness(x, fp)
@@ -442,7 +455,11 @@ function change_cost = change_penalty(new_sample, init_sample)
 
     % lets limit ourselves to 10% change from the initial point -- effectively a weighted L1 norm 
 
+    %allowable_diff = 0.05 * init_sample;        % TODO -- fool arond with this 
     allowable_diff = 0.05 * init_sample;        % TODO -- fool arond with this 
+
+
+
 
     abs_change = abs(new_sample - init_sample); 
 
@@ -476,9 +493,11 @@ function [new_fitness, new_sample] = fixed_control_fitness(init_sample, fit_data
     total_cost_fun = @(x) penalty_cost_fun(x) + w*design_cost_fun(x) + (1-w) * control_cost_fun(x) + change_cost_fun(x);
 
     % VAGUE SANITY CHECK ON INIT VALUES 
-    cmaOptions.MaxGenerations = 300; 
+    cmaOptions.MaxGenerations = 500; 
     cmaOptions.MaxStallGenerations = 50;   % 80 
-    parmdiffs = 0.05 * init_sample;     % or keep at identity? idk 
+
+
+    parmdiffs = 0.01 * init_sample;     % or keep at identity? idk  -- maybe want to make this much smaller?
 
     [new_sample, new_fitness, reason] =  cma(init_sample, total_cost_fun, cmaOptions, 'init_scale', parmdiffs, 'print', false);
 

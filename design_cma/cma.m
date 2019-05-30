@@ -199,8 +199,8 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
     constrained = zeros(lambda, 1); % number of samples that have been constrained
     
 
-    popStats = struct(); 
-    fit_data = cell(lambda, 1);
+    popStats = struct();    % data for members of population for one generation 
+    fit_data = cell(lambda, 1);     % 1 cell per pop member 
 
     parfor k = 1:lambda,
         newsample = xmean + sigma * (B * (D .* randn(N,1))); % m + sig * Normal(0,C) 
@@ -208,8 +208,17 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
         if ( strcmp(hybrid, 'lamarckian') || strcmp(hybrid, 'baldwinian'))   
     
             [sample_fitness, sample_fit_data] = fitnessfun(newsample);
- 
-            [updated_fitness, updated_sample] = hybridFun(newsample, sample_fit_data); 
+
+            if (sample_fit_data.penalty_cost > 1)
+                % if the initial thing had penalties, ignore it 
+                updated_fitness = sample_fitness; 
+                updated_sample = newsample; 
+
+            else 
+                [updated_fitness, updated_sample] = hybridFun(newsample, sample_fit_data); 
+            end     
+
+           
 
 
             % MIGHT BE USEFUL TO DISREGARD ANY UPDTE THAT DOESNT HELP!
@@ -225,16 +234,24 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
             update_diff = newsample - updated_sample;
             pct_change = 100 * (update_diff./newsample);
 
-            %disp('old: '); disp(newsample');
-            %disp('new:'); disp(updated_sample');
-            %disp('pct change'); disp(pct_change');
-            %display(sample_fitness)
-            %display(updated_fitness)
+            
+            %{
+      
+            sample_fit_data.inital_sample = newsample;
+            sample_fit_data.updated_sample = updated_sample;
 
-            %display(newsample)
-            %display(updated_sample)
+            sampe_fit_data.initial_fitness = sample_fitness; 
+            sample_fit_data.new_fitness = updated_fitness; 
 
-            % TODO - comment back in 
+            %}
+
+
+            fit_data{k} = sample_fit_data;      % Constains fitness data from the ORIGINAL opti point 
+            fit_data{k}.initial_sample = newsample; 
+            fit_data{k}.updated_sample = updated_sample; 
+
+            fit_data{k}.initial_fitness = sample_fitness;
+            fit_data{k}.new_fitness = updated_fitness; 
             
             sample_fitness = updated_fitness; 
             if (strcmp(hybrid, 'lamarckian'))
@@ -242,10 +259,10 @@ while (counteval < stopeval) && (iter <= maxIter) && ...
             end 
 
 
+            
+
             % Adding some of the update information to sample_fit_data so we can process later 
-            sample_fit_data.updated_sample = updated_sample;
-            sample_fit_data.new_fitness = updated_fitness; 
-            fit_data{k} = sample_fit_data; 
+
 
         else 
             sample_fitness = fitnessfun(newsample);     % may return the other data??? 
