@@ -10,7 +10,7 @@
 %
 %*******************************************************************
 
-
+%{
 close all; clear all; clc; 
 
 % make sure parraelization is running 
@@ -46,25 +46,25 @@ end
 
 save('basic_cma_convergence.mat'); 
 
-
+%}
 load('basic_cma_convergence.mat'); 
+
 
 
 fig = figure; hold all 
 for i = 1:length(n_list);
     n = n_list(i); 
     mins = min_lists{i}; 
-    plot(1:length(mins), mins, 'Displayname', sprintf('n = %d', n)); 
-
+    plot(1:length(mins), mins, 'Displayname', sprintf('%d springs', n), 'Linewidth', 2); 
 end 
 
 leg = legend;
-set(leg, 'Interpreter', 'latex')
+% set(leg, 'Interpreter', 'latex')
 
 xlabel('Generations');
 ylabel('Cost')
 
-print('basic_convergence_plot', '-dpng', '-r300');
+print('basic_convergence_plot', '-dpng', '-r500');
 
 
 
